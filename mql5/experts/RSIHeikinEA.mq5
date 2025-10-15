@@ -232,59 +232,55 @@ void ManageTrailingAndBE()
    if(!InpEnableTrailing && !InpEnableBreakEven) return;
 
    string sym=ActiveSymbol();
+   if(!PositionSelect(sym)) return;
+
    double pt = SymbolInfoDouble(sym, SYMBOL_POINT);
    double bid = SymbolInfoDouble(sym, SYMBOL_BID);
    double ask = SymbolInfoDouble(sym, SYMBOL_ASK);
 
-   for(int i=PositionsTotal()-1; i>=0; --i)
+   ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   double priceOpen = PositionGetDouble(POSITION_PRICE_OPEN);
+   double sl = PositionGetDouble(POSITION_SL);
+   double tp = PositionGetDouble(POSITION_TP);
+
+   if(InpEnableBreakEven)
    {
-      ulong ticket = PositionGetTicket(i);
-      if(!PositionSelectByTicket(ticket)) continue;
-      if(PositionGetString(POSITION_SYMBOL) != sym) continue;
-
-      ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-      double priceOpen = PositionGetDouble(POSITION_PRICE_OPEN);
-      double sl = PositionGetDouble(POSITION_SL);
-
-      if(InpEnableBreakEven)
+      if(type==POSITION_TYPE_BUY)
       {
-         if(type==POSITION_TYPE_BUY)
+         double profitPts = (bid - priceOpen)/pt;
+         double bePrice = priceOpen + InpBreakEvenOffsetPts*pt;
+         if(profitPts >= InpBreakEvenTriggerPts && (sl==0.0 || sl < bePrice))
+            Trade.PositionModify(sym, bePrice, tp);
+      }
+      else if(type==POSITION_TYPE_SELL)
+      {
+         double profitPts = (priceOpen - ask)/pt;
+         double bePrice = priceOpen - InpBreakEvenOffsetPts*pt;
+         if(profitPts >= InpBreakEvenTriggerPts && (sl==0.0 || sl > bePrice))
+            Trade.PositionModify(sym, bePrice, tp);
+      }
+   }
+
+   if(InpEnableTrailing)
+   {
+      if(type==POSITION_TYPE_BUY)
+      {
+         double profitPts = (bid - priceOpen)/pt;
+         if(profitPts >= InpTrailStartPoints)
          {
-            double profitPts = (bid - priceOpen)/pt;
-            double bePrice = priceOpen + InpBreakEvenOffsetPts*pt;
-            if(profitPts >= InpBreakEvenTriggerPts && (sl==0.0 || sl < bePrice))
-               Trade.PositionModify(ticket, bePrice, PositionGetDouble(POSITION_TP));
-         }
-         else if(type==POSITION_TYPE_SELL)
-         {
-            double profitPts = (priceOpen - ask)/pt;
-            double bePrice = priceOpen - InpBreakEvenOffsetPts*pt;
-            if(profitPts >= InpBreakEvenTriggerPts && (sl==0.0 || sl > bePrice))
-               Trade.PositionModify(ticket, bePrice, PositionGetDouble(POSITION_TP));
+            double newSL = bid - InpTrailStepPoints*pt;
+            if(sl==0.0 || newSL > sl)
+               Trade.PositionModify(sym, newSL, tp);
          }
       }
-
-      if(InpEnableTrailing)
+      else if(type==POSITION_TYPE_SELL)
       {
-         if(type==POSITION_TYPE_BUY)
+         double profitPts = (priceOpen - ask)/pt;
+         if(profitPts >= InpTrailStartPoints)
          {
-            double profitPts = (bid - priceOpen)/pt;
-            if(profitPts >= InpTrailStartPoints)
-            {
-               double newSL = bid - InpTrailStepPoints*pt;
-               if(sl==0.0 || newSL > sl)
-                  Trade.PositionModify(ticket, newSL, PositionGetDouble(POSITION_TP));
-            }
-         }
-         else if(type==POSITION_TYPE_SELL)
-         {
-            double profitPts = (priceOpen - ask)/pt;
-            if(profitPts >= InpTrailStartPoints)
-            {
-               double newSL = ask + InpTrailStepPoints*pt;
-               if(sl==0.0 || newSL < sl)
-                  Trade.PositionModify(ticket, newSL, PositionGetDouble(POSITION_TP));
-            }
+            double newSL = ask + InpTrailStepPoints*pt;
+            if(sl==0.0 || newSL < sl)
+               Trade.PositionModify(sym, newSL, tp);
          }
       }
    }
@@ -346,11 +342,7 @@ void OnTick()
    if(!OneTradeThisBarAllowed()) return;
 
    string sym=ActiveSymbol();
-   for(int i=PositionsTotal()-1; i>=0; --i)
-   {
-      if(!PositionSelectByTicket(PositionGetTicket(i))) continue;
-      if(PositionGetString(POSITION_SYMBOL)==sym) return;
-   }
+   if(PositionSelect(sym)) return;
 
    if(buy)  OpenPosition(POSITION_TYPE_BUY);
    if(sell) OpenPosition(POSITION_TYPE_SELL);
