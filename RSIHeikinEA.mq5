@@ -186,6 +186,8 @@ datetime g_lastBarTime[256]; // per TF new-bar tracking
 bool g_waitBuy=false, g_waitSell=false;
 int  g_crossBarBuy=-1, g_crossBarSell=-1; // bar index in StrategyTF when RSI cross detected
 int  g_heikinCountBuy=0, g_heikinCountSell=0;
+// effective TF for Heikin sequence evaluation (derived from inputs at init)
+ENUM_TIMEFRAMES g_effectiveHeikinTF = PERIOD_M1;
 
 // lockout & improvement
 int  g_lockBuyUntilBar=-1, g_lockSellUntilBar=-1;
@@ -401,7 +403,7 @@ void TryStartSetups(){ if(RSICrossUpThreshold(Inp_StrategyTF,Inp_RSI_CrossEvalMo
   if(Inp_ResetOnOppositeCross){ if(g_waitBuy && RSICrossDownThreshold(Inp_StrategyTF,Inp_RSI_CrossEvalMode,Inp_RSI_High)) ResetBuySetup(); if(g_waitSell && RSICrossUpThreshold(Inp_StrategyTF,Inp_RSI_CrossEvalMode,Inp_RSI_Low)) ResetSellSetup(); }
 }
 
-bool HeikinUpdateCount(bool forBuy){ ENUM_TIMEFRAMES tf = Inp_HeikinSeq_TF; int sh = (Inp_HeikinSeq_EvalMode==EM_CLOSED_BAR)?1:0; bool isBull = HeikinBull(tf, sh); if(forBuy){ if(isBull) g_heikinCountBuy++; else g_heikinCountBuy=0; return (g_heikinCountBuy>=Inp_N_RequiredHeikin_Buy); } else { bool isBear = !isBull; if(isBear) g_heikinCountSell++; else g_heikinCountSell=0; return (g_heikinCountSell>=Inp_N_RequiredHeikin_Sell); } }
+bool HeikinUpdateCount(bool forBuy){ ENUM_TIMEFRAMES tf = g_effectiveHeikinTF; int sh = (Inp_HeikinSeq_EvalMode==EM_CLOSED_BAR)?1:0; bool isBull = HeikinBull(tf, sh); if(forBuy){ if(isBull) g_heikinCountBuy++; else g_heikinCountBuy=0; return (g_heikinCountBuy>=Inp_N_RequiredHeikin_Buy); } else { bool isBear = !isBull; if(isBear) g_heikinCountSell++; else g_heikinCountSell=0; return (g_heikinCountSell>=Inp_N_RequiredHeikin_Sell); } }
 
 bool SetupExpired(bool forBuy){ int curBars=Bars(_Symbol,Inp_StrategyTF); if(forBuy){ if(g_crossBarBuy<0) return false; return (curBars > g_crossBarBuy + Inp_N_MaxWaitBars_Buy); } else { if(g_crossBarSell<0) return false; return (curBars > g_crossBarSell + Inp_N_MaxWaitBars_Sell); } }
 
@@ -478,7 +480,7 @@ void ManageOpenPositions(){ // iterate positions for this symbol
 }
 
 // ========================= LIFECYCLE =========================
-int OnInit(){ ArrayInitialize(g_lastBarTime,0); if(Inp_HeikinSeq_TF==PERIOD_CURRENT) Inp_HeikinSeq_TF=Inp_StrategyTF; return(INIT_SUCCEEDED); }
+int OnInit(){ ArrayInitialize(g_lastBarTime,0); g_effectiveHeikinTF = (Inp_HeikinSeq_TF==PERIOD_CURRENT ? Inp_StrategyTF : Inp_HeikinSeq_TF); return(INIT_SUCCEEDED); }
 void OnDeinit(const int reason){ }
 
 void OnTick(){ bool doSignalUpdate = (Inp_SignalUpdateMode==UM_ON_TICK) || NewBarTF(Inp_StrategyTF);
