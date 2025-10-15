@@ -457,7 +457,7 @@ void ManageOpenPositions(){ // iterate positions for this symbol
 }
 
 // ========================= LIFECYCLE =========================
-int OnInit(){ if(Inp_HeikinSeq_TF==PERIOD_M1 && Inp_StrategyTF!=PERIOD_M1) Inp_HeikinSeq_TF=Inp_StrategyTF; ArrayInitialize(g_lastBarTime,0); return(INIT_SUCCEEDED); }
+int OnInit(){ ArrayInitialize(g_lastBarTime,0); return(INIT_SUCCEEDED); }
 void OnDeinit(const int reason){ }
 
 void OnTick(){ bool doSignalUpdate = (Inp_SignalUpdateMode==UM_ON_TICK) || NewBarTF(Inp_StrategyTF);
