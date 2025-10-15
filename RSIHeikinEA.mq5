@@ -220,9 +220,9 @@ bool InTimeWindowEntries(){ if(!Inp_TW_Enable) return true; MqlDateTime tm; Time
   if(Inp_SkipOneDay_Enable){ string d=TimeToString(TimeCurrent(),TIME_DATE); if(d==Inp_SkipOneDay_Date){ if(Inp_SkipOneDay_CustomHours){ if(TimeInWindow(Inp_SkipOneDay_StartHHMM,Inp_SkipOneDay_EndHHMM,cur)) return false; } else return false; } }
   bool allowed = inIncl && !inExcl; return allowed; }
 
-int CountPositionsAndPendings(){ int count=0; // positions
+int CountPositionsAndPendings(){ int count=0; // positions (global)
   for(int i=0;i<PositionsTotal();++i){ if(PositionSelectByIndex(i)){ count++; } }
-  if(Inp_CountPendingOrders){ int ot=OrdersTotal(); for(int j=0;j<ot;++j){ ulong ticket=OrderGetTicket(j); if(ticket==0) continue; if(OrderSelect(ticket)){ ENUM_ORDER_TYPE typ=(ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE); if(typ==ORDER_TYPE_BUY_LIMIT || typ==ORDER_TYPE_SELL_LIMIT || typ==ORDER_TYPE_BUY_STOP || typ==ORDER_TYPE_SELL_STOP || typ==ORDER_TYPE_BUY_STOP_LIMIT || typ==ORDER_TYPE_SELL_STOP_LIMIT) count++; } } }
+  if(Inp_CountPendingOrders){ int ot=OrdersTotal(); for(int j=0;j<ot;++j){ if(OrderSelect(j,SELECT_BY_INDEX,MODE_TRADES)){ ENUM_ORDER_TYPE typ=(ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE); if(typ==ORDER_TYPE_BUY_LIMIT || typ==ORDER_TYPE_SELL_LIMIT || typ==ORDER_TYPE_BUY_STOP || typ==ORDER_TYPE_SELL_STOP || typ==ORDER_TYPE_BUY_STOP_LIMIT || typ==ORDER_TYPE_SELL_STOP_LIMIT) count++; } } }
   return count; }
 
 // ========================= HEIKIN-ASHI INTERNAL =========================
