@@ -195,34 +195,34 @@ double PipSize(){ return (_Digits==3||_Digits==5)? 10.0*_Point : _Point; }
 int TFIndex(ENUM_TIMEFRAMES tf){ return ((int)tf)&255; }
 bool NewBarTF(ENUM_TIMEFRAMES tf){ int idx=TFIndex(tf); datetime t=iTime(_Symbol,tf,0); if(t==0) return false; if(t!=g_lastBarTime[idx]){ g_lastBarTime[idx]=t; return true; } return false; }
 int HHMMToMinutes(int hhmm){ int hh=hhmm/100; int mm=hhmm%100; return hh*60+mm; }
+bool TimeInWindow(int stHHMM,int enHHMM,int curMinutes){ int s=HHMMToMinutes(stHHMM); int e=HHMMToMinutes(enHHMM); if(s==0 && e==0) return false; if(e>=s) return (curMinutes>=s && curMinutes<=e); return (curMinutes>=s || curMinutes<=e); }
+bool DayMaskMatch(int mask,int wday){ if(mask==0) return false; int bit=1<<wday; return (mask & bit)!=0; }
 bool InTimeWindowEntries(){ if(!Inp_TW_Enable) return true; MqlDateTime tm; TimeToStruct(TimeCurrent(),tm); int wday=tm.day_of_week; int cur=tm.hour*60+tm.min;
-  auto inWindow=[&](int st,int en){ int s=HHMMToMinutes(st), e=HHMMToMinutes(en); if(s==0 && e==0) return false; if(e>=s) return (cur>=s && cur<=e); return (cur>=s || cur<=e); };
-  auto matchDays=[&](int mask){ if(mask==0) return false; int bit=1<<wday; return (mask & bit)!=0; };
   // includes
   bool inIncl=false; if(Inp_TW_Mode!=TW_EXCLUDE_ONLY){
-    if(matchDays(Inp_TW_Incl1_DaysMask) && inWindow(Inp_TW_Incl1_StartHHMM,Inp_TW_Incl1_EndHHMM)) inIncl=true;
-    if(matchDays(Inp_TW_Incl2_DaysMask) && inWindow(Inp_TW_Incl2_StartHHMM,Inp_TW_Incl2_EndHHMM)) inIncl=true;
-    if(matchDays(Inp_TW_Incl3_DaysMask) && inWindow(Inp_TW_Incl3_StartHHMM,Inp_TW_Incl3_EndHHMM)) inIncl=true;
-    if(matchDays(Inp_TW_Incl4_DaysMask) && inWindow(Inp_TW_Incl4_StartHHMM,Inp_TW_Incl4_EndHHMM)) inIncl=true;
-    if(matchDays(Inp_TW_Incl5_DaysMask) && inWindow(Inp_TW_Incl5_StartHHMM,Inp_TW_Incl5_EndHHMM)) inIncl=true;
-    if(matchDays(Inp_TW_Incl6_DaysMask) && inWindow(Inp_TW_Incl6_StartHHMM,Inp_TW_Incl6_EndHHMM)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl1_DaysMask,wday) && TimeInWindow(Inp_TW_Incl1_StartHHMM,Inp_TW_Incl1_EndHHMM,cur)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl2_DaysMask,wday) && TimeInWindow(Inp_TW_Incl2_StartHHMM,Inp_TW_Incl2_EndHHMM,cur)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl3_DaysMask,wday) && TimeInWindow(Inp_TW_Incl3_StartHHMM,Inp_TW_Incl3_EndHHMM,cur)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl4_DaysMask,wday) && TimeInWindow(Inp_TW_Incl4_StartHHMM,Inp_TW_Incl4_EndHHMM,cur)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl5_DaysMask,wday) && TimeInWindow(Inp_TW_Incl5_StartHHMM,Inp_TW_Incl5_EndHHMM,cur)) inIncl=true;
+    if(DayMaskMatch(Inp_TW_Incl6_DaysMask,wday) && TimeInWindow(Inp_TW_Incl6_StartHHMM,Inp_TW_Incl6_EndHHMM,cur)) inIncl=true;
   } else inIncl=true; // include not used
   // excludes
   bool inExcl=false; if(Inp_TW_Mode!=TW_INCLUDE_ONLY){
-    if(matchDays(Inp_TW_Excl1_DaysMask) && inWindow(Inp_TW_Excl1_StartHHMM,Inp_TW_Excl1_EndHHMM)) inExcl=true;
-    if(matchDays(Inp_TW_Excl2_DaysMask) && inWindow(Inp_TW_Excl2_StartHHMM,Inp_TW_Excl2_EndHHMM)) inExcl=true;
-    if(matchDays(Inp_TW_Excl3_DaysMask) && inWindow(Inp_TW_Excl3_StartHHMM,Inp_TW_Excl3_EndHHMM)) inExcl=true;
-    if(matchDays(Inp_TW_Excl4_DaysMask) && inWindow(Inp_TW_Excl4_StartHHMM,Inp_TW_Excl4_EndHHMM)) inExcl=true;
-    if(matchDays(Inp_TW_Excl5_DaysMask) && inWindow(Inp_TW_Excl5_StartHHMM,Inp_TW_Excl5_EndHHMM)) inExcl=true;
-    if(matchDays(Inp_TW_Excl6_DaysMask) && inWindow(Inp_TW_Excl6_StartHHMM,Inp_TW_Excl6_EndHHMM)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl1_DaysMask,wday) && TimeInWindow(Inp_TW_Excl1_StartHHMM,Inp_TW_Excl1_EndHHMM,cur)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl2_DaysMask,wday) && TimeInWindow(Inp_TW_Excl2_StartHHMM,Inp_TW_Excl2_EndHHMM,cur)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl3_DaysMask,wday) && TimeInWindow(Inp_TW_Excl3_StartHHMM,Inp_TW_Excl3_EndHHMM,cur)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl4_DaysMask,wday) && TimeInWindow(Inp_TW_Excl4_StartHHMM,Inp_TW_Excl4_EndHHMM,cur)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl5_DaysMask,wday) && TimeInWindow(Inp_TW_Excl5_StartHHMM,Inp_TW_Excl5_EndHHMM,cur)) inExcl=true;
+    if(DayMaskMatch(Inp_TW_Excl6_DaysMask,wday) && TimeInWindow(Inp_TW_Excl6_StartHHMM,Inp_TW_Excl6_EndHHMM,cur)) inExcl=true;
   }
   // skip one day
-  if(Inp_SkipOneDay_Enable){ string d=TimeToString(TimeCurrent(),TIME_DATE); if(d==Inp_SkipOneDay_Date){ if(Inp_SkipOneDay_CustomHours){ int s=HHMMToMinutes(Inp_SkipOneDay_StartHHMM), e=HHMMToMinutes(Inp_SkipOneDay_EndHHMM); int curm=cur; bool inSkip=(e>=s)? (curm>=s && curm<=e) : (curm>=s || curm<=e); if(inSkip) return false; } else return false; } }
+  if(Inp_SkipOneDay_Enable){ string d=TimeToString(TimeCurrent(),TIME_DATE); if(d==Inp_SkipOneDay_Date){ if(Inp_SkipOneDay_CustomHours){ if(TimeInWindow(Inp_SkipOneDay_StartHHMM,Inp_SkipOneDay_EndHHMM,cur)) return false; } else return false; } }
   bool allowed = inIncl && !inExcl; return allowed; }
 
 int CountPositionsAndPendings(){ int count=0; // positions
   for(int i=0;i<PositionsTotal();++i){ if(PositionSelectByIndex(i)){ count++; } }
-  if(Inp_CountPendingOrders){ for(int j=0;j<OrdersTotal();++j){ if(OrderSelect(j,SELECT_BY_INDEX)){ if((ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE) == ORDER_TYPE_BUY_LIMIT || (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE)==ORDER_TYPE_SELL_LIMIT || (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE)==ORDER_TYPE_BUY_STOP || (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE)==ORDER_TYPE_SELL_STOP) count++; } } }
+  if(Inp_CountPendingOrders){ int ot=OrdersTotal(); for(int j=0;j<ot;++j){ ulong ticket=OrderGetTicket(j); if(ticket==0) continue; if(OrderSelect(ticket)){ ENUM_ORDER_TYPE typ=(ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE); if(typ==ORDER_TYPE_BUY_LIMIT || typ==ORDER_TYPE_SELL_LIMIT || typ==ORDER_TYPE_BUY_STOP || typ==ORDER_TYPE_SELL_STOP || typ==ORDER_TYPE_BUY_STOP_LIMIT || typ==ORDER_TYPE_SELL_STOP_LIMIT) count++; } } }
   return count; }
 
 // ========================= HEIKIN-ASHI INTERNAL =========================
