@@ -259,13 +259,12 @@ bool FilterPass(FilterType type,bool forBuy, ENUM_TIMEFRAMES tf, bool useClosedB
   case FT_PSAR_TREND:{ int h=iSAR(_Symbol,tf,Inp_PSAR_Step_Default,Inp_PSAR_Max_Default); double ps[1]; ArraySetAsSeries(ps,true); if(CopyBuffer(h,0,sh,1,ps)<1) return false; double cl=iClose(_Symbol,tf,sh); return forBuy? (cl>ps[0]) : (cl<ps[0]); }
   case FT_HEIKIN_FILTER:{ bool bull=HeikinBull(tf,sh); return forBuy? bull:(!bull); }
   case FT_ATR_GATE:{ int h=iATR(_Symbol,tf,Inp_ATR_Period_Default); double a[1]; ArraySetAsSeries(a,true); if(CopyBuffer(h,0,sh,1,a)<1) return false; return (a[0]>=Inp_ATR_Threshold_Default); }
-  case FT_VOLUME:{ int bars=2; double v[2]; ArraySetAsSeries(v,true); if(CopyBuffer(iVolume(_Symbol,tf),0,sh,1,v)<1) { // fallback to series
-      v[0]=iVolume(_Symbol,tf,sh);
-    }
-    if(Inp_VolumeMode_Default==VM_ABS_THRESHOLD){ return (v[0]>=Inp_VolumeThreshold_Default); }
+  case FT_VOLUME:{
+    double vol = (double)iVolume(_Symbol,tf, (useClosedBar?1:0) );
+    if(Inp_VolumeMode_Default==VM_ABS_THRESHOLD){ return (vol>=Inp_VolumeThreshold_Default); }
     else { // MA_RATIO
-      double sma=0; int n=Inp_VolumeMAPeriod_Default; int got=0; for(int i=sh;i<sh+n;i++){ double vi=iVolume(_Symbol,tf,i); if(vi<=0) break; sma+=vi; got++; }
-      if(got==0) return false; sma/=got; return (sma>0 && v[0]>=Inp_VolumeRatio_Default*sma);
+      double sma=0.0; int n=Inp_VolumeMAPeriod_Default; int got=0; for(int i=(useClosedBar?1:0); i<(useClosedBar?1:0)+n; ++i){ double vi = (double)iVolume(_Symbol,tf,i); if(vi<=0.0) break; sma+=vi; got++; }
+      if(got==0) return false; sma/=got; return (sma>0.0 && vol >= Inp_VolumeRatio_Default * sma);
     }
   }
   return true; }
@@ -319,7 +318,10 @@ void ComputeStopSetSL(bool isBuy, StopSetType type, UnitMode mode, ENUM_TIMEFRAM
     case SS_FIXED:{ double points=(mode==UM_PIPS)? value*PipSize()/_Point : (value/100.0)*entryPrice/_Point; if(points>0) slOut=isBuy? entryPrice - points*_Point : entryPrice + points*_Point; break; }
     case SS_ATR:{ double pts=ComputeATRPoints(tf,atrPeriod,atrMult); if(pts>0) slOut=isBuy? entryPrice - pts*_Point : entryPrice + pts*_Point; break; }
     case SS_PSAR:{ int h=iSAR(_Symbol,tf,psarStep,psarMax); double ps[1]; ArraySetAsSeries(ps,true); if(CopyBuffer(h,0,sh,1,ps)>0){ slOut = ps[0]; } break; }
-    case SS_SWING:{ int lb=swingLookback; if(lb>0){ if(isBuy){ int li = iLowest(_Symbol,tf,MODE_LOW,lb,sh); double low = iLow(_Symbol,tf,li); slOut = low - swingOffsetPips*PipSize(); } else { int hi = iHighest(_Symbol,tf,MODE_HIGH,lb,sh); double high = iHigh(_Symbol,tf,hi); slOut = high + swingOffsetPips*PipSize(); } } break; }
+    case SS_SWING:{ int lb=swingLookback; if(lb>0){
+        if(isBuy){ double minLow=DBL_MAX; for(int i=(useClosedBar?1:0); i<(useClosedBar?1:0)+lb; ++i){ double lv=iLow(_Symbol,tf,i); if(lv==0.0) break; if(lv<minLow) minLow=lv; } if(minLow<DBL_MAX) slOut = minLow - swingOffsetPips*PipSize(); }
+        else { double maxHigh=-DBL_MAX; for(int i=(useClosedBar?1:0); i<(useClosedBar?1:0)+lb; ++i){ double hv=iHigh(_Symbol,tf,i); if(hv==0.0) break; if(hv>maxHigh) maxHigh=hv; } if(maxHigh>-DBL_MAX) slOut = maxHigh + swingOffsetPips*PipSize(); }
+      } break; }
     case SS_BREAKEVEN: // handled in management (dynamic)
     case SS_TRAILING:  // handled in management (dynamic)
     case SS_TIME:      // handled in management
