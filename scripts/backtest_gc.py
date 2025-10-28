@@ -619,7 +619,19 @@ def to_utc(dt_naive: pd.Timestamp) -> pd.Timestamp:
     return dt_local.astimezone(pytz.UTC)
 
 
-def simulate_leg(df: pd.DataFrame, start_utc: pd.Timestamp, end_utc: pd.Timestamp, side: str, entry: float, sl: float, tp: float, sequencing: str = 'conservative', trailing_points: Optional[float] = None) -> Tuple[str, float, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
+def simulate_leg(
+    df: pd.DataFrame,
+    start_utc: pd.Timestamp,
+    end_utc: pd.Timestamp,
+    side: str,
+    entry: float,
+    sl: float,
+    tp: float,
+    sequencing: str = 'conservative',
+    trailing_points: Optional[float] = None,
+    be_after_r: Optional[float] = None,
+    allow_reentry_once: bool = False,
+) -> Tuple[str, float, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
     # Filter df window
     w = df.loc[(df.index >= start_utc) & (df.index <= end_utc)].copy()
     in_pos = False
@@ -627,6 +639,7 @@ def simulate_leg(df: pd.DataFrame, start_utc: pd.Timestamp, end_utc: pd.Timestam
     stop = sl
     max_fav = None
     min_fav = None
+    reentered = False
     # define helpers
     def hit_entry(row):
         h = row['High']
@@ -672,7 +685,16 @@ def simulate_leg(df: pd.DataFrame, start_utc: pd.Timestamp, end_utc: pd.Timestam
                 outcome = after_fill_hit(row, stop, tp)
                 if outcome:
                     if outcome == 'SL':
-                        return ('SL', -1.0, fill_time, ts)
+                        if allow_reentry_once and not reentered:
+                            # reset state: allow a single reentry later
+                            in_pos = False
+                            reentered = True
+                            fill_time = None
+                            stop = sl
+                            max_fav = None
+                            min_fav = None
+                        else:
+                            return ('SL', -1.0, fill_time, ts)
                     else:
                         rr = (tp - entry) / (entry - sl) if side == 'buy' else (entry - tp) / (sl - entry)
                         return ('TP', rr, fill_time, ts)
@@ -695,10 +717,27 @@ def simulate_leg(df: pd.DataFrame, start_utc: pd.Timestamp, end_utc: pd.Timestam
                     new_stop = trail_base + trailing_points
                     stop = min(stop, new_stop)
                 stop_level = stop
+            # BE rule after X R
+            if be_after_r is not None and be_after_r > 0:
+                sl_dist = (entry - sl) if side == 'buy' else (sl - entry)
+                trigger = be_after_r * sl_dist
+                if max_fav is not None and max_fav >= trigger:
+                    # move stop to entry (break-even)
+                    stop = max(stop, entry) if side == 'buy' else min(stop, entry)
+                    stop_level = stop
             # check exits
             outcome = after_fill_hit(row, stop_level, tp)
             if outcome:
                 if outcome == 'SL':
+                    if allow_reentry_once and not reentered:
+                        # allow single reentry later
+                        in_pos = False
+                        reentered = True
+                        fill_time = None
+                        stop = sl
+                        max_fav = None
+                        min_fav = None
+                        continue
                     return ('SL', -1.0, fill_time, ts)
                 else:
                     rr = (tp - entry) / (entry - sl) if side == 'buy' else (entry - tp) / (sl - entry)
@@ -721,7 +760,7 @@ def simulate_leg(df: pd.DataFrame, start_utc: pd.Timestamp, end_utc: pd.Timestam
     return ('OPEN', rr_cur, fill_time, w.index[-1])
 
 
-def run_backtest(sequencing: str, trailing_points: Optional[float] = None) -> Dict:
+def run_backtest(sequencing: str, trailing_points: Optional[float] = None, be_after_r: Optional[float] = None) -> Dict:
     orders = parse_orders(RAW_TEXT)
     legs = expand_legs_with_group(orders)
     # resolve duplicated orders (same day/time/side/sl/tp/entry) into same group id to split risk
@@ -741,7 +780,9 @@ def run_backtest(sequencing: str, trailing_points: Optional[float] = None) -> Di
     # Download price data once
     start_date = pd.Timestamp('2025-10-09')
     end_date = pd.Timestamp('2025-10-28')
-    df = yf.download('GC=F', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'), interval='5m', auto_adjust=True, prepost=False)
+    # Use 5m because Yahoo limits 1m to last ~8 days per request
+    interval = '5m'
+    df = yf.download('GC=F', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'), interval=interval, auto_adjust=True, prepost=False)
     if df.empty:
         raise RuntimeError('Price data download failed for GC=F')
     # Flatten columns if multi-index like ('High','GC=F')
@@ -768,7 +809,20 @@ def run_backtest(sequencing: str, trailing_points: Optional[float] = None) -> Di
         entry = leg['entry']
         sl = leg['sl']
         tp = leg['tp']
-        outcome, r_mult, t_fill, t_exit = simulate_leg(df, start_utc, end_utc, side, entry, sl, tp, sequencing=sequencing, trailing_points=trailing_points)
+        allow_reentry = 'zone_hunt' in (leg['tags'] or '')
+        outcome, r_mult, t_fill, t_exit = simulate_leg(
+            df,
+            start_utc,
+            end_utc,
+            side,
+            entry,
+            sl,
+            tp,
+            sequencing=sequencing,
+            trailing_points=trailing_points,
+            be_after_r=be_after_r,
+            allow_reentry_once=allow_reentry,
+        )
         results.append({
             **leg,
             'outcome': outcome,
@@ -821,16 +875,17 @@ def run_backtest(sequencing: str, trailing_points: Optional[float] = None) -> Di
 
 def main():
     scenarios = [
-        ('conservative', None),
-        ('optimistic', None),
-        ('conservative', 10.0),  # trailing 10 points
-        ('conservative', 15.0),
-        ('conservative', 20.0),
+        ('conservative', None, None),
+        ('optimistic', None, None),
+        ('conservative', None, 1.0),  # BE at +1R
+        ('conservative', 10.0, None),  # trailing 10 points
+        ('conservative', 15.0, None),
+        ('conservative', 20.0, None),
     ]
     rows = []
-    for seq, trail in scenarios:
-        bt = run_backtest(seq, trail)
-        print({'seq': seq, 'trail': trail, 'wins': bt['wins'], 'losses': bt['losses'], 'notrig': bt['not_triggered'], 'open': bt['open'], 'winrate%': bt['winrate_percent'], 'pnl$': bt['pnl_usd']})
+    for seq, trail, be_r in scenarios:
+        bt = run_backtest(seq, trail, be_r)
+        print({'seq': seq, 'trail': trail, 'be_after_R': be_r, 'wins': bt['wins'], 'losses': bt['losses'], 'notrig': bt['not_triggered'], 'open': bt['open'], 'winrate%': bt['winrate_percent'], 'pnl$': bt['pnl_usd']})
         rows.append(bt)
     # write detailed csv
     # last scenario detailed
